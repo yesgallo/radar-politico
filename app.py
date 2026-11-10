@@ -2,18 +2,78 @@ import streamlit as st
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter
 
 # CONFIGURACIÓN GENERAL
 st.set_page_config(
-    page_title="RADAR POLÍTICO | Comunicación Política",
+    page_title="RADAR POLÍTICO | Bolívar & Séptima Sección",
     page_icon="📡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# ESTILOS PROFESIONALES INSTITUCIONALES (DISEÑO MODERNO, RESPONSIVE, DARK MODE)
+# MANEJO EXACTO DE FECHA Y HORA ARGENTINA (UTC-3)
+DIAS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+MESES_ES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+
+def obtener_momento_argentina():
+    ahora_ar = datetime.utcnow() - timedelta(hours=3)
+    dia_texto = DIAS_ES[ahora_ar.weekday()]
+    mes_texto = MESES_ES[ahora_ar.month - 1]
+    fecha_completa = f"{dia_texto} {ahora_ar.day} de {mes_texto} de {ahora_ar.year}"
+    fecha_corta = ahora_ar.strftime("%d/%m/%Y")
+    hora_texto = ahora_ar.strftime("%H:%M hs")
+    return fecha_completa, fecha_corta, hora_texto
+
+FECHA_COMPLETA, FECHA_CORTA, HORA_ACTUAL = obtener_momento_argentina()
+
+# CONTROL DE CACHÉ Y ESTADO EN MEMORIA
+if "cache_buster" not in st.session_state:
+    st.session_state.cache_buster = 0
+
+if "ultima_sincronizacion" not in st.session_state:
+    st.session_state.ultima_sincronizacion = HORA_ACTUAL
+
+# CONTACTOS DE WHATSAPP
+if "whatsapp_contacts" not in st.session_state:
+    st.session_state.whatsapp_contacts = [
+        {"nombre": "Prensa Bolívar", "telefono": "+5492314000000", "cargo": "Equipo Municipal"},
+        {"nombre": "Intendencia Bolívar", "telefono": "+5492314111111", "cargo": "Gabinete"},
+        {"nombre": "Bloque Concejales", "telefono": "+5492314222222", "cargo": "HCD Bolívar"}
+    ]
+
+# LISTA PRIORITARIA (BOLÍVAR PRIMERO Y DESTACADO)
+if "dirigentes_lista" not in st.session_state:
+    st.session_state.dirigentes_lista = [
+        # BOLÍVAR
+        "Bali Bucca", "Franco Canepare", "Nico Morán", "César Pacho", "Sandra Santos",
+        "Flavio De Marco", "Mónica Ochoa", "Ariel Alomar", "Patricia Oroz",
+        "Gualberto Mezquida", "María Laura Rodríguez", "Marcos Beorlegui",
+        # INTENDENTES DE LA SÉPTIMA
+        "Maximiliano Wesner", "Nelson Sombra", "Ramiro Egüen", "José Luis Salomón",
+        "Ramón José Capra", "Maximiliano Oscar Sciaini", "Gustavo Cocconi",
+        # LEGISLADORES DE LA SÉPTIMA
+        "Mercedes Landívar", "Martín Endere", "Alejandra Lordén", "Ricardo Lissalde",
+        "Lorena Mandagarán", "Alejandro Celillo",
+        # PROVINCIA
+        "Axel Kicillof", "Gabriel Katopodis", "Sergio Massa"
+    ]
+
+if "municipios_lista" not in st.session_state:
+    st.session_state.municipios_lista = [
+        "Bolívar", "Olavarría", "Azul", "25 de Mayo", "Saladillo",
+        "General Alvear", "Roque Pérez", "Tapalqué", "Provincia de Buenos Aires"
+    ]
+
+if "temas_lista" not in st.session_state:
+    st.session_state.temas_lista = [
+        "Denuncias y Cruces Opositores", "Presupuesto y Tasas Municipales", "Tarifas y Servicios",
+        "Obras Públicas y Hábitat", "Seguridad y Patrullaje", "Caminos Rurales",
+        "Salarios y Paritarias", "Reelecciones 2027", "Producción y Empleo"
+    ]
+
+# ESTILOS CSS PROFESIONALES
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
@@ -36,7 +96,7 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         padding: 20px 24px;
-        background: rgba(15, 23, 42, 0.75);
+        background: rgba(15, 23, 42, 0.8);
         backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 18px;
@@ -63,7 +123,7 @@ st.markdown("""
     
     .brand-subtitle {
         font-size: 12px;
-        font-weight: 600;
+        font-weight: 700;
         color: #38bdf8;
         letter-spacing: 0.5px;
         text-transform: uppercase;
@@ -100,14 +160,14 @@ st.markdown("""
     }
 
     .kpi-box {
-        background: rgba(15, 23, 42, 0.6);
+        background: rgba(15, 23, 42, 0.65);
         border: 1px solid rgba(255, 255, 255, 0.07);
         border-radius: 14px;
         padding: 16px;
         transition: all 0.2s ease;
     }
     .kpi-box:hover {
-        border-color: rgba(56, 189, 248, 0.35);
+        border-color: rgba(56, 189, 248, 0.4);
         transform: translateY(-2px);
     }
     .kpi-label {
@@ -139,10 +199,20 @@ st.markdown("""
         transition: all 0.2s ease;
     }
     .news-card-pro:hover {
-        border-color: rgba(56, 189, 248, 0.35);
+        border-color: rgba(56, 189, 248, 0.4);
         background: rgba(15, 23, 42, 0.9);
         transform: translateY(-2px);
     }
+    
+    .card-bolivar {
+        border-left: 4px solid #38bdf8 !important;
+        background: rgba(8, 47, 73, 0.35) !important;
+    }
+    .card-denuncia {
+        border-left: 4px solid #ef4444 !important;
+        background: rgba(69, 10, 10, 0.35) !important;
+    }
+
     .news-title-text {
         font-size: 15px;
         font-weight: 700;
@@ -154,6 +224,16 @@ st.markdown("""
     }
     .news-title-text:hover { color: #38bdf8; }
 
+    .tag-bolivar {
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.2);
+        border: 1px solid #0284c7;
+        padding: 3px 8px;
+        border-radius: 9999px;
+    }
     .tag-medio {
         font-size: 11px;
         font-weight: 700;
@@ -234,44 +314,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# GESTOR DE CONTACTOS PARA WHATSAPP
-if "whatsapp_contacts" not in st.session_state:
-    st.session_state.whatsapp_contacts = [
-        {"nombre": "Equipo de Comunicación", "telefono": "+5492314000000", "cargo": "Prensa Central"},
-        {"nombre": "Despacho de Intendencia", "telefono": "+5492314111111", "cargo": "Gabinete"}
-    ]
-
-# PLANTEL COMPLETO DE LA SÉPTIMA SECCIÓN Y CONCEJO DELIBERANTE DE BOLÍVAR
-if "dirigentes_lista" not in st.session_state:
-    st.session_state.dirigentes_lista = [
-        # Intendentes de la Séptima (8)
-        "Bali Bucca", "Maximiliano Wesner", "Nelson Sombra", "Ramiro Egüen",
-        "José Luis Salomón", "Ramón José Capra", "Maximiliano Oscar Sciaini", "Gustavo Cocconi",
-        # Legisladores Provinciales de la Séptima
-        "Mercedes Landívar", "Martín Endere", "Alejandra Lordén", "Ricardo Lissalde",
-        "Lorena Mandagarán", "Alejandro Celillo",
-        # Concejales y Referentes de Bolívar
-        "Franco Canepare", "Nico Morán", "César Pacho", "Sandra Santos",
-        "Flavio De Marco", "Mónica Ochoa", "Ariel Alomar", "Patricia Oroz",
-        # Provincia y Referentes Clave
-        "Axel Kicillof", "Gabriel Katopodis", "Sergio Massa"
-    ]
-
-if "municipios_lista" not in st.session_state:
-    st.session_state.municipios_lista = [
-        "Bolívar", "Olavarría", "Azul", "25 de Mayo", "Saladillo",
-        "General Alvear", "Roque Pérez", "Tapalqué", "Provincia de Buenos Aires"
-    ]
-
-if "temas_lista" not in st.session_state:
-    st.session_state.temas_lista = [
-        "Presupuesto y Tasas", "Denuncias y Cruces", "Tarifas y Servicios",
-        "Obras Públicas", "Reelecciones 2027", "Seguridad y Patrullaje",
-        "Salarios y Paritarias", "Producción y Empleo", "Caminos Rurales"
-    ]
-
-# CABECERA VISUAL CON LOGO MINIMALISTA
-st.markdown("""
+# CABECERA VISUAL
+st.markdown(f"""
 <div class="brand-header">
     <div class="brand-logo-lockup">
         <svg width="42" height="42" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -284,28 +328,30 @@ st.markdown("""
         </svg>
         <div>
             <h1 class="brand-title">RADAR POLÍTICO</h1>
-            <div class="brand-subtitle">Comunicación Política Digital • Séptima Sección & PBA</div>
+            <div class="brand-subtitle">Centro de Monitoreo • Bolívar, Séptima Sección & PBA</div>
         </div>
     </div>
     <div class="badge-live">
         <span class="live-dot"></span>
-        <span>MONITOREO EN VIVO • COYUNTURA 7:00 AM</span>
+        <span>EN VIVO • {FECHA_CORTA}</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# MOTOR DE ESCANEO CONTINUO (BARRIDO COMPLETO DE MEDIOS REGIONALES)
+# MOTOR DE ESCANEO EXCLUSIVO EN PORTALES PERIODÍSTICOS (SIN SITIOS MUNICIPALES)
 @st.cache_data(ttl=1800)
-def ejecutar_monitoreo_profesional(dirigentes, municipios, temas):
-    actores_query = " OR ".join([f'"{d}"' for d in dirigentes[:12]])
-    distritos_query = " OR ".join([f'"{m}"' for m in municipios[:8]])
-    temas_query = "denuncia OR cuestionan OR reclamo OR presupuesto OR tarifas OR reelecciones OR seguridad OR obras OR tasas"
+def ejecutar_monitoreo_periodistico(dirigentes, municipios, temas, _buster):
+    actores_bolivar = '"Bali Bucca" OR "Franco Canepare" OR "Nico Morán" OR "César Pacho" OR "Sandra Santos"'
+    actores_seccion = '"Maximiliano Wesner" OR "Nelson Sombra" OR "Ramiro Egüen" OR "Salomón" OR "Kicillof" OR "Katopodis"'
+    distritos_query = '"Bolívar" OR "Olavarría" OR "Azul" OR "25 de Mayo" OR "Saladillo" OR "Séptima Sección"'
+    temas_query = "denuncia OR cuestionan OR reclamo OR presupuesto OR tarifas OR reelecciones OR seguridad OR obras OR tasas OR paritaria"
+    exclusion_gob = "-site:gob.ar -site:gov.ar -site:gba.gob.ar"
     
-    query = f"({actores_query}) ({distritos_query}) ({temas_query}) when:3d"
+    query = f"({actores_bolivar} OR {actores_seccion}) ({distritos_query}) ({temas_query}) {exclusion_gob} when:3d"
     url = "https://news.google.com/rss/search?q=" + urllib.parse.quote(query) + "&hl=es-419&gl=AR&ceid=AR:es-419"
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'})
     
-    resultados = []
+    noticias_procesadas = []
     try:
         with urllib.request.urlopen(req, timeout=12) as response:
             xml_data = response.read()
@@ -317,7 +363,7 @@ def ejecutar_monitoreo_profesional(dirigentes, municipios, temas):
                 link = item.find('link').text if item.find('link') is not None else ""
                 pubDate = item.find('pubDate').text if item.find('pubDate') is not None else ""
                 
-                source = "Medio Regional"
+                source = "Portal de Noticias"
                 title = title_full
                 if " - " in title_full:
                     parts = title_full.rsplit(" - ", 1)
@@ -326,7 +372,7 @@ def ejecutar_monitoreo_profesional(dirigentes, municipios, temas):
                 
                 lower = (title + " " + source).lower()
                 
-                # Identificación de Dirigente
+                # Identificación de Dirigente (Prioridad Bolívar)
                 ref_encontrado = "Séptima Sección"
                 for d in dirigentes:
                     if d.lower() in lower or d.split()[-1].lower() in lower:
@@ -340,15 +386,19 @@ def ejecutar_monitoreo_profesional(dirigentes, municipios, temas):
                         mun_encontrado = m
                         break
                 
-                # Clasificación de Denuncias Opositoras y Temas
-                es_denuncia_oposicion = any(k in lower for k in [
+                es_denuncia = any(k in lower for k in [
                     "denuncia", "cuestionan", "reclamo", "oposición", "pedido de informes",
                     "interpelación", "reparos", "irregularidad", "apuntó contra", "cruce"
                 ])
                 
+                es_de_bolivar = ("bolívar" in lower or ref_encontrado in [
+                    "Bali Bucca", "Franco Canepare", "Nico Morán", "César Pacho", "Sandra Santos",
+                    "Flavio De Marco", "Mónica Ochoa", "Ariel Alomar", "Patricia Oroz"
+                ])
+                
                 tema_encontrado = "Gestión Municipal"
-                if es_denuncia_oposicion:
-                    tema_encontrado = "Denuncias y Cruces"
+                if es_denuncia:
+                    tema_encontrado = "Denuncias y Cruces Opositores"
                 elif any(k in lower for k in ["tarifa", "luz", "gas", "aumento", "factura"]):
                     tema_encontrado = "Tarifas y Servicios"
                 elif "reelecci" in lower:
@@ -356,137 +406,213 @@ def ejecutar_monitoreo_profesional(dirigentes, municipios, temas):
                 elif any(k in lower for k in ["seguridad", "polic", "robo", "delito"]):
                     tema_encontrado = "Seguridad y Patrullaje"
                 elif any(k in lower for k in ["presupuesto", "fondo", "leasing", "tasas", "paritaria"]):
-                    tema_encontrado = "Presupuesto y Tasas"
+                    tema_encontrado = "Presupuesto y Tasas Municipales"
                 elif any(k in lower for k in ["obra", "pavimento", "cloaca", "hidráulica"]):
-                    tema_encontrado = "Obras Públicas"
+                    tema_encontrado = "Obras Públicas y Hábitat"
                 
-                resultados.append({
+                noticias_procesadas.append({
                     "title": title,
                     "source": source,
                     "link": link,
                     "date": pubDate,
                     "dirigente": ref_encontrado,
-                    "municipio": mun_encontrado,
+                    "municipio": "Bolívar" if es_de_bolivar else mun_encontrado,
                     "tema": tema_encontrado,
-                    "es_denuncia": es_denuncia_oposicion,
-                    "is_alerta": es_denuncia_oposicion or tema_encontrado in ["Tarifas y Servicios", "Reelecciones 2027"]
+                    "es_denuncia": es_denuncia,
+                    "es_bolivar": es_de_bolivar
                 })
     except Exception as e:
-        st.warning(f"Sincronizando fuentes locales: {e}")
+        st.warning(f"Sincronizando noticias con medios locales: {e}")
         
-    return resultados
+    return noticias_procesadas
 
-noticias = ejecutar_monitoreo_profesional(
+# EJECUCIÓN DEL MONITOREO
+noticias = ejecutar_monitoreo_periodistico(
     st.session_state.dirigentes_lista,
     st.session_state.municipios_lista,
-    st.session_state.temas_lista
+    st.session_state.temas_lista,
+    st.session_state.cache_buster
 )
 
-# DETECCIÓN DEL TEMA MÁS REPLICADO (TRENDING TOPIC REGIONAL)
+# ANÁLISIS DE DATOS
 conteo_temas = Counter(n["tema"] for n in noticias)
-tema_mas_replicado = conteo_temas.most_common(1)[0][0] if conteo_temas else "Gestión y Obras"
+tema_mas_replicado = conteo_temas.most_common(1)[0][0] if conteo_temas else "Presupuesto y Tasas"
 cantidad_replicas = conteo_temas.most_common(1)[0][1] if conteo_temas else 0
 
-total_denuncias = sum(1 for n in noticias if n["es_denuncia"])
 total_noticias = len(noticias)
-hora_actual = datetime.now().strftime("%H:%M hs")
+total_bolivar = sum(1 for n in noticias if n["es_bolivar"])
+total_denuncias = sum(1 for n in noticias if n["es_denuncia"])
 
-# FILA DE INDICADORES EJECUTIVOS
+# INDICADORES SUPERIORES
 k1, k2, k3, k4 = st.columns(4)
 with k1:
     st.markdown(f"""
-    <div class="kpi-box">
-        <div class="kpi-label">Novedades en Medios</div>
-        <div class="kpi-num" style="color:#38bdf8;">{total_noticias}</div>
-        <div class="kpi-hint">Monitoreo global continuo</div>
+    <div class="kpi-box" style="border-color: rgba(56, 189, 248, 0.4);">
+        <div class="kpi-label" style="color:#38bdf8;">🎯 Foco Bolívar</div>
+        <div class="kpi-num" style="color:#38bdf8;">{total_bolivar}</div>
+        <div class="kpi-hint">Noticias y dirigentes locales</div>
     </div>
     """, unsafe_allow_html=True)
+
 with k2:
     st.markdown(f"""
     <div class="kpi-box">
-        <div class="kpi-label">Denuncias de Oposición</div>
+        <div class="kpi-label">🚨 Denuncias Oposición</div>
         <div class="kpi-num" style="color:#f87171;">{total_denuncias}</div>
-        <div class="kpi-hint">Alertas de cruce político</div>
+        <div class="kpi-hint">Reclamos y cruces políticos</div>
     </div>
     """, unsafe_allow_html=True)
+
 with k3:
     st.markdown(f"""
     <div class="kpi-box">
         <div class="kpi-label">Eje Más Replicado</div>
-        <div class="kpi-num" style="font-size:18px; color:#fde047; padding-top:6px;">{tema_mas_replicado}</div>
+        <div class="kpi-num" style="font-size:17px; color:#fde047; padding-top:6px;">{tema_mas_replicado}</div>
         <div class="kpi-hint">{cantidad_replicas} publicaciones coincidentes</div>
     </div>
     """, unsafe_allow_html=True)
+
 with k4:
     st.markdown(f"""
     <div class="kpi-box">
-        <div class="kpi-label">Hora del Informe</div>
-        <div class="kpi-num" style="color:#34d399; font-size:22px;">{hora_actual}</div>
-        <div class="kpi-hint">Sincronizado para el equipo</div>
+        <div class="kpi-label">Hora del Monitoreo</div>
+        <div class="kpi-num" style="color:#34d399; font-size:22px;">{st.session_state.ultima_sincronizacion}</div>
+        <div class="kpi-hint">{FECHA_CORTA} (Oficial Argentina)</div>
     </div>
     """, unsafe_allow_html=True)
 
 st.write("")
 
-# BOTÓN DE RE-ESCANEO A DEMANDA
+# BOTÓN DE RE-ESCANEO INMEDIATO
 c_btn1, c_btn2 = st.columns([1, 2])
 with c_btn1:
-    if st.button("🔄 Escanear Medios Ahora", type="primary"):
+    if st.button("🔄 Escanear Medios Ahora", key="btn_escanear_ahora", type="primary"):
         st.cache_data.clear()
+        st.session_state.cache_buster += 1
+        _, _, nueva_hora = obtener_momento_argentina()
+        st.session_state.ultima_sincronizacion = nueva_hora
         st.rerun()
 with c_btn2:
-    st.caption("ℹ️ El escaneo por defecto incluye **a todos los intendentes, legisladores, concejales de Bolívar y temas cargados**.")
+    st.caption("ℹ️ El escaneo por defecto incluye **a Bolívar en primer lugar, todos los intendentes, legisladores y concejales**.")
 
 st.write("")
 
-# ADMINISTRADOR PARA AGREGAR NUEVAS ENTIDADES
-with st.expander("➕ Administrar y Agregar Nuevos Dirigentes, Municipios o Temas"):
-    col_add1, col_add2, col_add3 = st.columns(3)
+# FORMULARIOS PARA AGREGAR NUEVAS ENTIDADES (CON ST.FORM PARA QUE NO FALLEN)
+with st.expander("➕ Administrar y Agregar Nuevos Dirigentes, Municipios o Temas de Interés"):
+    st.markdown("##### Sumar nuevos parámetros al monitoreo general:")
     
-    with col_add1:
-        nuevo_d = st.text_input("Nuevo Dirigente / Concejal:", placeholder="Ej: Patricia Cobello")
-        if st.button("Agregar Político") and nuevo_d:
-            if nuevo_d not in st.session_state.dirigentes_lista:
-                st.session_state.dirigentes_lista.append(nuevo_d)
-                st.cache_data.clear()
-                st.success(f"Se sumó al radar: {nuevo_d}")
-                st.rerun()
+    col_f1, col_f2, col_f3 = st.columns(3)
+    
+    with col_f1:
+        with st.form(key="form_nuevo_dirigente", clear_on_submit=True):
+            nuevo_d = st.text_input("Nuevo Político o Concejal:", placeholder="Ej: Patricia Cobello")
+            btn_d = st.form_submit_button("Guardar Político")
+            if btn_d and nuevo_d:
+                if nuevo_d not in st.session_state.dirigentes_lista:
+                    st.session_state.dirigentes_lista.append(nuevo_d)
+                    st.session_state.cache_buster += 1
+                    st.cache_data.clear()
+                    st.success(f"Se sumó al radar: {nuevo_d}")
+                    st.rerun()
 
-    with col_add2:
-        nuevo_m = st.text_input("Nuevo Municipio / Sección:", placeholder="Ej: Las Flores / Cuarta Sección")
-        if st.button("Agregar Territorio") and nuevo_m:
-            if nuevo_m not in st.session_state.municipios_lista:
-                st.session_state.municipios_lista.append(nuevo_m)
-                st.cache_data.clear()
-                st.success(f"Se sumó al radar: {nuevo_m}")
-                st.rerun()
+    with col_f2:
+        with st.form(key="form_nuevo_municipio", clear_on_submit=True):
+            nuevo_m = st.text_input("Nuevo Municipio o Sección:", placeholder="Ej: Las Flores")
+            btn_m = st.form_submit_button("Guardar Territorio")
+            if btn_m and nuevo_m:
+                if nuevo_m not in st.session_state.municipios_lista:
+                    st.session_state.municipios_lista.append(nuevo_m)
+                    st.session_state.cache_buster += 1
+                    st.cache_data.clear()
+                    st.success(f"Se sumó al radar: {nuevo_m}")
+                    st.rerun()
 
-    with col_add3:
-        nuevo_t = st.text_input("Nuevo Tema de Coyuntura:", placeholder="Ej: Conflicto con IOMA")
-        if st.button("Agregar Eje de Agenda") and nuevo_t:
-            if nuevo_t not in st.session_state.temas_lista:
-                st.session_state.temas_lista.append(nuevo_t)
-                st.cache_data.clear()
-                st.success(f"Se sumó al radar: {nuevo_t}")
-                st.rerun()
+    with col_f3:
+        with st.form(key="form_nuevo_tema", clear_on_submit=True):
+            nuevo_t = st.text_input("Nuevo Tema de Coyuntura:", placeholder="Ej: Conflicto IOMA")
+            btn_t = st.form_submit_button("Guardar Tema")
+            if btn_t and nuevo_t:
+                if nuevo_t not in st.session_state.temas_lista:
+                    st.session_state.temas_lista.append(nuevo_t)
+                    st.session_state.cache_buster += 1
+                    st.cache_data.clear()
+                    st.success(f"Se sumó al radar: {nuevo_t}")
+                    st.rerun()
 
 st.write("")
 
-# PESTAÑAS ESTRUCTURADAS
-tab_general, tab_denuncias, tab_politicos, tab_territorio, tab_temas, tab_whatsapp = st.tabs([
-    "📊 Panorama General",
+# PESTAÑAS ESTRUCTURADAS (BOLÍVAR PRIMERO Y DESTACADO)
+tab_bolivar, tab_denuncias, tab_general, tab_politicos, tab_territorio, tab_whatsapp = st.tabs([
+    "🎯 Foco Bolívar (Prioritario)",
     "🚨 Denuncias Opositoras & Cruces",
+    "📊 Panorama General Séptima",
     "👤 Por Político / Concejal",
     "📍 Por Municipio",
-    "📌 Por Tema Replicado",
     "📲 WhatsApp & Difusión (7 AM)"
 ])
 
-# 1. PANORAMA GENERAL
+# 1. FOCO BOLÍVAR (TAB PRINCIPAL)
+with tab_bolivar:
+    st.markdown(f"### 🏛️ Monitoreo Exclusivo de Bolívar • {FECHA_COMPLETA}")
+    st.caption("Seguimiento del intendente Bali Bucca, funcionarios municipales, concejales y noticias locales.")
+
+    noticias_bolivar = [n for n in noticias if n["es_bolivar"]]
+    
+    if not noticias_bolivar:
+        st.info("No se registraron publicaciones con mención directa a Bolívar en las últimas horas.")
+    else:
+        st.write(f"Noticias detectadas vinculadas a Bolívar: **{len(noticias_bolivar)}**")
+        for n in noticias_bolivar:
+            tag_denuncia = '<span class="tag-denuncia">Cruce Opositor</span>' if n["es_denuncia"] else ''
+            st.markdown(f"""
+            <div class="news-card-pro card-bolivar">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="tag-medio">{n['source']}</span>
+                        <span class="tag-bolivar">Bolívar</span>
+                        <span class="tag-dirigente">👤 {n['dirigente']}</span>
+                    </div>
+                    <div>{tag_denuncia}</div>
+                </div>
+                <a href="{n['link']}" target="_blank" class="news-title-text" style="color:#e0f2fe;">
+                    {n['title']} ↗
+                </a>
+                <div style="font-size:12px; color:#94a3b8;">
+                    Eje: <strong>{n['tema']}</strong> | Medio: <strong>{n['source']}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# 2. RADAR DE DENUNCIAS OPOSITORAS Y CRUCES
+with tab_denuncias:
+    st.markdown("### 🚨 Denuncias de la Oposición y Conflictos en Medios")
+    st.caption("Filtro prioritario de reclamos, pedidos de informes de concejales y cuestionamientos a la gestión.")
+    
+    denuncias_list = [n for n in noticias if n["es_denuncia"]]
+    if not denuncias_list:
+        st.success("Tranquilidad mediática: no se detectan denuncias u operaciones opositoras registradas en las últimas horas.")
+    else:
+        st.write(f"Alertas de cruces y denuncias registradas: **{len(denuncias_list)}**")
+        for d in denuncias_list:
+            st.markdown(f"""
+            <div class="news-card-pro card-denuncia">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <span class="tag-medio" style="color:#f87171; background:rgba(239,68,68,0.2);">{d['source']}</span>
+                    <span class="tag-denuncia">Conflicto Opositor</span>
+                </div>
+                <a href="{d['link']}" target="_blank" class="news-title-text" style="color:#fecaca;">
+                    {d['title']} ↗
+                </a>
+                <div style="font-size:12px; color:#cbd5e1;">
+                    Referente / Concejal: <strong style="color:#ffffff;">{d['dirigente']}</strong> | Distrito: <strong>{d['municipio']}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+# 3. PANORAMA GENERAL
 with tab_general:
-    hoy_texto = datetime.now().strftime("%A %d de %B de %Y").capitalize()
-    st.markdown(f"### 📋 Novedades de la Jornada • {hoy_texto}")
-    st.caption("Listado completo de publicaciones en los 23 medios de la región.")
+    st.markdown(f"### 📋 Todas las Novedades de la Jornada • {FECHA_COMPLETA}")
+    st.caption("Listado completo de publicaciones en los portales periodísticos de la región.")
     
     for n in noticias:
         tag_denuncia = '<span class="tag-denuncia">Cruce Opositor</span>' if n["es_denuncia"] else ''
@@ -511,32 +637,7 @@ with tab_general:
         </div>
         """, unsafe_allow_html=True)
 
-# 2. RADAR DE DENUNCIAS OPOSITORAS Y CRUCES
-with tab_denuncias:
-    st.markdown("### 🚨 Denuncias de la Oposición y Conflictos en Medios")
-    st.caption("Filtro prioritario de reclamos, pedidos de informes de concejales y cuestionamientos a la gestión.")
-    
-    denuncias_list = [n for n in noticias if n["es_denuncia"]]
-    if not denuncias_list:
-        st.success("Tranquilidad mediática: no se detectan denuncias u operaciones opositoras registradas en las últimas horas.")
-    else:
-        for d in denuncias_list:
-            st.markdown(f"""
-            <div class="news-card-pro" style="border-left: 4px solid #ef4444; background: rgba(30, 10, 10, 0.5);">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <span class="tag-medio" style="color:#f87171; background:rgba(239,68,68,0.2);">{d['source']}</span>
-                    <span class="tag-denuncia">Conflicto Opositor</span>
-                </div>
-                <a href="{d['link']}" target="_blank" class="news-title-text" style="color:#fecaca;">
-                    {d['title']} ↗
-                </a>
-                <div style="font-size:12px; color:#cbd5e1;">
-                    Referente / Concejal: <strong style="color:#ffffff;">{d['dirigente']}</strong> | Distrito: <strong>{d['municipio']}</strong>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-# 3. POR POLÍTICO (INCLUYE CONCEJALES DE BOLÍVAR Y LEGISLADORES)
+# 4. POR POLÍTICO / CONCEJAL
 with tab_politicos:
     st.markdown("### 👤 Seguimiento Individual por Intendentes, Legisladores y Concejales")
     dirigente_seleccionado = st.selectbox("Seleccionar dirigente o concejal:", ["Todos"] + sorted(st.session_state.dirigentes_lista))
@@ -561,7 +662,7 @@ with tab_politicos:
             </div>
             """, unsafe_allow_html=True)
 
-# 4. POR MUNICIPIO
+# 5. POR MUNICIPIO
 with tab_territorio:
     st.markdown("### 📍 Seguimiento Territorial por Municipio y Provincia")
     municipio_seleccionado = st.selectbox("Seleccionar municipio o ámbito territorial:", ["Todos"] + sorted(st.session_state.municipios_lista))
@@ -586,60 +687,37 @@ with tab_territorio:
             </div>
             """, unsafe_allow_html=True)
 
-# 5. POR TEMA REPLICADO
-with tab_temas:
-    st.markdown("### 📌 Seguimiento por Ejes de Agenda Pública")
-    tema_seleccionado = st.selectbox("Seleccionar eje temático:", ["Todos"] + sorted(list(set(n["tema"] for n in noticias))))
-    
-    noticias_tema = noticias if tema_seleccionado == "Todos" else [n for n in noticias if n["tema"] == tema_seleccionado]
-    st.write(f"Noticias vinculadas a **{tema_seleccionado}**: **{len(noticias_tema)}**")
-    
-    for n in noticias_tema:
-        st.markdown(f"""
-        <div class="news-card-pro">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <span class="tag-medio">{n['source']}</span>
-                <span class="tag-dirigente">👤 {n['dirigente']}</span>
-            </div>
-            <a href="{n['link']}" target="_blank" class="news-title-text">
-                {n['title']} ↗
-            </a>
-            <div style="font-size:12px; color:#64748b;">Distrito: {n['municipio']}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-# 6. DISTRIBUCIÓN DE WHATSAPP (A LAS 7:00 AM)
+# 6. DISTRIBUCIÓN POR WHATSAPP (A LAS 7:00 AM)
 with tab_whatsapp:
-    st.markdown("### 📲 Centro de Envío y Difusión por WhatsApp")
-    st.caption("Administrá los destinatarios para que reciban el informe matutino directo a su WhatsApp personal o grupo.")
+    st.markdown("### 📲 Centro de Difusión Matutino para WhatsApp")
+    st.caption("Texto preparado para enviar a los grupos del equipo, intendentes y concejales a primera hora.")
 
-    hoy_f = datetime.now().strftime("%d/%m/%Y")
+    items_bolivar = [f"• *Bolívar* | *{n['dirigente']}*: {n['title']}" for n in noticias if n["es_bolivar"]][:3]
+    items_denuncias = [f"🚨 *CRUCE OPOSITOR* | *{d['dirigente']}* ({d['municipio']}): {d['title']}" for d in noticias if d["es_denuncia"]][:2]
+    items_resto = [f"• *{p['dirigente']}* ({p['municipio']}): {p['title']}" for p in noticias if not p["es_bolivar"] and not p["es_denuncia"]][:3]
     
-    # Armado del mensaje ejecutivo
-    items_texto = []
-    for d in [n for n in noticias if n["es_denuncia"]][:3]:
-        items_texto.append(f"🚨 *CRUCE OPOSITOR* | *{d['dirigente']}* ({d['municipio']}): {d['title']}")
-    for p in [n for n in noticias if not n["es_denuncia"]][:4]:
-        items_texto.append(f"• *{p['dirigente']}* ({p['municipio']}): {p['title']}")
-        
-    wa_msg = f"""📡 *RADAR POLÍTICO • REPORTE MATUTINO 7:00 AM*
-🗓️ {hoy_f} | Séptima Sección & Provincia de Buenos Aires
+    wa_msg = f"""📡 *RADAR POLÍTICO • INFORME 7:00 AM*
+🗓️ {FECHA_COMPLETA}
 
-🔥 *TEMA MÁS REPLICADO EN MEDIOS:* {tema_mas_replicado.upper()}
+🏛️ *FOCO BOLÍVAR:*
+{chr(10).join(items_bolivar) if items_bolivar else '• Sin temas locales de impacto hoy.'}
 
-*SÍNTESIS DE NOVEDADES:*
-{chr(10).join(items_texto) if items_texto else '• Sin temas de alta repercusión.'}
+🚨 *CRUCES Y DENUNCIAS:*
+{chr(10).join(items_denuncias) if items_denuncias else '• Sin denuncias opositoras activas.'}
+
+🔥 *TEMA MÁS REPLICADO EN LA REGIÓN:* {tema_mas_replicado.upper()}
+{chr(10).join(items_resto) if items_resto else ''}
 
 🔗 *Ver panel completo en vivo:* https://radar-politico-7.streamlit.app/
-_Monitoreo en tiempo real de los 23 medios de la región._"""
+_Monitoreo periodístico en tiempo real de la Séptima Sección._"""
 
     col_w1, col_w2 = st.columns([3, 2])
     with col_w1:
-        st.text_area("Texto listo para difusión:", value=wa_msg, height=260)
-        st.info("💡 Podés seleccionar el texto anterior para reenviarlo manualmente o usar los accesos directos de la derecha.")
+        st.text_area("Texto listo para difusión:", value=wa_msg, height=270)
+        st.info("💡 Hacé clic en el cuadro y presioná Ctrl + A para copiar el reporte completo.")
     
     with col_w2:
-        st.markdown("##### 👥 Enviar con un clic a contactos registrados:")
+        st.markdown("##### 👥 Enviar directo por WhatsApp:")
         for c in st.session_state.whatsapp_contacts:
             url_wa = f"https://api.whatsapp.com/send?phone={c['telefono'].replace('+', '').replace(' ', '')}&text={urllib.parse.quote(wa_msg)}"
             st.markdown(f"""
@@ -655,12 +733,14 @@ _Monitoreo en tiempo real de los 23 medios de la región._"""
             """, unsafe_allow_html=True)
             
         with st.expander("➕ Sumar nuevo número de WhatsApp a la lista"):
-            nuevo_nom = st.text_input("Nombre o Grupo:", placeholder="Ej: Prensa Bolívar / Intendente")
-            nuevo_tel = st.text_input("Teléfono (con código de país):", placeholder="Ej: +5492314123456")
-            nuevo_car = st.text_input("Rol / Cargo:", placeholder="Ej: Vocero / Concejal")
-            if st.button("Guardar Contacto") and nuevo_nom and nuevo_tel:
-                st.session_state.whatsapp_contacts.append({
-                    "nombre": nuevo_nom, "telefono": nuevo_tel, "cargo": nuevo_car
-                })
-                st.success(f"Se sumó {nuevo_nom} a la lista de envíos.")
-                st.rerun()
+            with st.form(key="form_nuevo_contacto_wa", clear_on_submit=True):
+                nuevo_nom = st.text_input("Nombre o Grupo:", placeholder="Ej: Prensa Bolívar / Intendente")
+                nuevo_tel = st.text_input("Teléfono (con código de país):", placeholder="Ej: +5492314123456")
+                nuevo_car = st.text_input("Rol / Cargo:", placeholder="Ej: Vocero / Concejal")
+                btn_wa = st.form_submit_button("Guardar Contacto")
+                if btn_wa and nuevo_nom and nuevo_tel:
+                    st.session_state.whatsapp_contacts.append({
+                        "nombre": nuevo_nom, "telefono": nuevo_tel, "cargo": nuevo_car
+                    })
+                    st.success(f"Se sumó {nuevo_nom} a la lista de envíos.")
+                    st.rerun()
